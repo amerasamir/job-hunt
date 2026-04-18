@@ -116,7 +116,8 @@ def status_badge(status: str) -> str:
         "عرض وصل": "badge-offer",
         "مرفوض":    "badge-rejected",
     }
-    return f'<span class="badge {colors.get(status, \"badge-applied\")}">{status}</span>'
+    css = colors.get(status, "badge-applied")
+    return f'<span class="badge {css}">{status}</span>'
 
 def tracker_to_df() -> pd.DataFrame:
     if not st.session_state.tracker:
