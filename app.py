@@ -92,13 +92,29 @@ def extract_pdf_text(uploaded_file) -> str:
     reader = PyPDF2.PdfReader(io.BytesIO(uploaded_file.read()))
     return "\n".join(p.extract_text() or "" for p in reader.pages)
 
-def gemini_call(prompt: str, api_key: str) -> str:
+def gemini_call(prompt: str, api_key: str, retries: int = 3) -> str:
     client = genai.Client(api_key=api_key)
-    resp = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt,
-    )
-    return resp.text.strip()
+    models_to_try = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-1.5-flash-latest"]
+    last_error = None
+    for model in models_to_try:
+        for attempt in range(retries):
+            try:
+                resp = client.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                )
+                return resp.text.strip()
+            except Exception as e:
+                last_error = e
+                err_str = str(e)
+                if "429" in err_str or "RESOURCE_EXHAUSTED" in err_str:
+                    import time
+                    wait = 20 * (attempt + 1)
+                    time.sleep(wait)
+                    continue
+                else:
+                    raise e
+    raise last_error
 
 def search_jobs(query: str, max_results: int = 8) -> list[dict]:
     results = []
@@ -252,7 +268,17 @@ with tab1:
                     result = gemini_call(prompt, st.session_state.gemini_key)
                     st.session_state.analysis = result
                 except Exception as e:
-                    st.error(f"خطأ في Gemini API: {e}")
+                    err = str(e)
+                    if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                        st.warning("⏳ الـ API وصل للـ quota المجاني. جرّبي واحدة من الحلول في الأسفل 👇")
+                        st.info("""
+**حلول سريعة:**
+1. **انتظري دقيقتين** وحاولي تاني (الـ quota بيتجدد كل دقيقة)
+2. **اعملي API Key جديد** من [aistudio.google.com](https://aistudio.google.com) بحساب Google تاني
+3. **فعّلي الـ billing** على مشروعك في Google Cloud (مش لازم تدفعي — في $300 مجاني للمبتدئين)
+                        """)
+                    else:
+                        st.error(f"خطأ في Gemini API: {e}")
 
     if st.session_state.analysis:
         st.markdown("---")
@@ -336,7 +362,12 @@ with tab2:
                     st.session_state.jobs = jobs
                     st.session_state.searched = True
                 except Exception as e:
-                    st.error(f"خطأ في تحليل النتايج: {e}")
+                    err = str(e)
+                    if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                        st.warning("⏳ الـ API وصل للـ quota. بيعرض النتايج من غير تقييم AI...")
+                        st.info("انتظري دقيقتين وجرّبي تاني، أو اعملي API Key جديد من [aistudio.google.com](https://aistudio.google.com)")
+                    else:
+                        st.error(f"خطأ: {e}")
                     st.session_state.jobs = all_raw
         elif all_raw:
             st.session_state.jobs = [
@@ -458,7 +489,11 @@ with tab3:
                     result = gemini_call(prompt, st.session_state.gemini_key)
                     st.markdown(result)
                 except Exception as e:
-                    st.error(f"خطأ: {e}")
+                    err = str(e)
+                    if "429" in err or "RESOURCE_EXHAUSTED" in err:
+                        st.warning("⏳ الـ API وصل للـ quota. انتظري دقيقتين وحاولي تاني.")
+                    else:
+                        st.error(f"خطأ: {e}")
 
     st.divider()
     st.markdown("#### 📌 موارد مهمة للفيزا")
