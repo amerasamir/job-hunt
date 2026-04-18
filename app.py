@@ -1,5 +1,6 @@
 import streamlit as st
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import pandas as pd
 import json
 import io
@@ -92,9 +93,11 @@ def extract_pdf_text(uploaded_file) -> str:
     return "\n".join(p.extract_text() or "" for p in reader.pages)
 
 def gemini_call(prompt: str, api_key: str) -> str:
-    genai.configure(api_key=api_key)
-    model = genai.GenerativeModel("gemini-1.5-flash")
-    resp = model.generate_content(prompt)
+    client = genai.Client(api_key=api_key)
+    resp = client.models.generate_content(
+        model="gemini-2.0-flash",
+        contents=prompt,
+    )
     return resp.text.strip()
 
 def search_jobs(query: str, max_results: int = 8) -> list[dict]:
